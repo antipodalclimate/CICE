@@ -18,7 +18,7 @@
       use ice_fileunits, only: nu_diag
       use icepack_intfc, only: icepack_warnings_flush, icepack_warnings_aborted
       use icepack_intfc, only: icepack_max_algae, icepack_max_doc, &
-          icepack_max_don, icepack_max_dic, icepack_max_fe, icepack_max_aero
+          icepack_max_don, icepack_max_dic, icepack_max_fe, icepack_max_aero, icepack_max_mp
       use icepack_intfc, only: icepack_query_parameters, &
           icepack_query_tracer_sizes, icepack_query_tracer_flags, &
           icepack_query_tracer_indices
@@ -35,6 +35,7 @@
                  write_restart_fsd,       read_restart_fsd, &
                  write_restart_iso,       read_restart_iso, &
                  write_restart_aero,      read_restart_aero, &
+                 write_restart_mp,        read_restart_mp, &
                  write_restart_bgc,       read_restart_bgc,  &
                  write_restart_hbrine,    read_restart_hbrine
 
@@ -48,6 +49,7 @@
          restart_fsd      , & ! if .true., read floe size restart file
          restart_iso      , & ! if .true., read isotope tracer restart file
          restart_aero     , & ! if .true., read aerosol tracer restart file
+         restart_mp       , & ! if .true., read microplastic tracer restart file
          restart_hbrine   , & ! if .true., read hbrine from restart file
          restart_bgc          ! if .true., read bgc restart file
 
@@ -762,6 +764,114 @@
 
       end subroutine read_restart_aero
 
+!=======================================================================
+! Dumps all values needed for restarting
+!
+! authors Elizabeth Hunke, LANL (original version)
+!         David Bailey, NCAR
+!         Marika Holland, NCAR
+
+      subroutine write_restart_mp()
+
+      use ice_domain_size, only: n_mp
+      use ice_state, only: trcrn
+      use ice_fileunits, only: nu_dump_mp
+
+      ! local variables
+
+      integer (kind=int_kind) :: &
+         k                    ! loop indices
+
+      logical (kind=log_kind) :: diag
+
+      character (len=3)       :: nchar
+      integer (kind=int_kind) :: nt_mp
+      character(len=*),parameter :: subname='(write_restart_mp)'
+
+      !-----------------------------------------------------------------
+
+      if (my_task == master_task) write(nu_diag,*) subname,'microplastics'
+
+      call icepack_query_tracer_indices(nt_mp_out=nt_mp)
+      call icepack_warnings_flush(nu_diag)
+      if (icepack_warnings_aborted()) call abort_ice(error_message=subname, &
+         file=__FILE__, line=__LINE__)
+
+      diag = .true.
+
+      do k = 1, n_mp
+       write(nchar,'(i3.3)') k
+       call write_restart_field(nu_dump_mp,0, &
+            trcrn(:,:,nt_mp  +(k-1)*4,:,:),'ruf8','mpsnossl'//nchar, &
+            ncat,diag)
+       call write_restart_field(nu_dump_mp,0, &
+            trcrn(:,:,nt_mp+1+(k-1)*4,:,:),'ruf8','mpsnoint'//nchar, &
+            ncat,diag)
+       call write_restart_field(nu_dump_mp,0, &
+            trcrn(:,:,nt_mp+2+(k-1)*4,:,:),'ruf8','mpicessl'//nchar, &
+            ncat,diag)
+       call write_restart_field(nu_dump_mp,0, &
+            trcrn(:,:,nt_mp+3+(k-1)*4,:,:),'ruf8','mpiceint'//nchar, &
+            ncat,diag)
+      enddo
+
+      end subroutine write_restart_mp
+
+!=======================================================================
+
+! Reads all values needed for an ice microplastic restart
+!
+! authors Elizabeth Hunke, LANL (original version)
+!         David Bailey, NCAR
+!         Marika Holland, NCAR
+
+      subroutine read_restart_mp()
+
+      use ice_domain_size, only: n_mp
+      use ice_state, only: trcrn
+      use ice_fileunits, only: nu_restart_mp
+
+      ! local variables
+
+      integer (kind=int_kind) :: &
+         k                    ! loop indices
+
+      logical (kind=log_kind) :: &
+         diag
+      integer (kind=int_kind) :: nt_mp
+
+      character (len=3)       :: nchar
+      character(len=*),parameter :: subname='(read_restart_mp)'
+
+      !-----------------------------------------------------------------
+
+      if (my_task == master_task) write(nu_diag,*) subname,'microplastics'
+
+      call icepack_query_tracer_indices(nt_mp_out=nt_mp)
+      call icepack_warnings_flush(nu_diag)
+      if (icepack_warnings_aborted()) call abort_ice(error_message=subname, &
+         file=__FILE__, line=__LINE__)
+
+      diag = .true.
+
+      do k = 1, n_mp
+       write(nchar,'(i3.3)') k
+       call read_restart_field(nu_restart_mp,0, &
+            trcrn(:,:,nt_mp  +(k-1)*4,:,:),'ruf8','mpsnossl'//trim(nchar), &
+            ncat,diag,field_type=field_type_scalar,field_loc=field_loc_center)
+       call read_restart_field(nu_restart_mp,0, &
+            trcrn(:,:,nt_mp+1+(k-1)*4,:,:),'ruf8','mpsnoint'//trim(nchar), &
+            ncat,diag,field_type=field_type_scalar,field_loc=field_loc_center)
+       call read_restart_field(nu_restart_mp,0, &
+            trcrn(:,:,nt_mp+2+(k-1)*4,:,:),'ruf8','mpicessl'//trim(nchar), &
+            ncat,diag,field_type=field_type_scalar,field_loc=field_loc_center)
+       call read_restart_field(nu_restart_mp,0, &
+            trcrn(:,:,nt_mp+3+(k-1)*4,:,:),'ruf8','mpiceint'//trim(nchar), &
+            ncat,diag,field_type=field_type_scalar,field_loc=field_loc_center)
+      enddo
+
+      end subroutine read_restart_mp
+      
 !=======================================================================
 
       subroutine read_restart_hbrine()

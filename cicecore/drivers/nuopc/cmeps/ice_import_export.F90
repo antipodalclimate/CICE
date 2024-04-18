@@ -16,7 +16,7 @@ module ice_import_export
   use ice_flux           , only : flat, fsens, flwout, evap, fswabs, fhocn, fswthru
   use ice_flux           , only : fswthru_vdr, fswthru_vdf, fswthru_idr, fswthru_idf
   use ice_flux           , only : send_i2x_per_cat, fswthrun_ai
-  use ice_flux_bgc       , only : faero_atm, faero_ocn
+  use ice_flux_bgc       , only : faero_atm, faero_ocn, fmp_atm, fmp_ocn, mp_ocn
   use ice_flux_bgc       , only : fiso_atm, fiso_ocn, fiso_evap
   use ice_flux_bgc       , only : Qa_iso, Qref_iso, HDO_ocn, H2_18O_ocn, H2_16O_ocn
   use ice_flux           , only : fresh, fsalt, zlvl, uatm, vatm, potT, Tair, Qa
@@ -116,6 +116,7 @@ contains
     character(char_len) :: stdname
     character(char_len) :: cvalue
     logical             :: flds_wiso         ! use case
+    logical             :: flds_mp           ! use case
     logical             :: flds_wave         ! use case
     logical             :: isPresent, isSet
     character(len=*), parameter :: subname='(ice_import_export:ice_advertise_fields)'
@@ -153,6 +154,18 @@ contains
        write(nu_diag,*)'flds_wiso = ',flds_wiso
     end if
 
+    ! Determine if the following attributes are sent by the driver and if so read them in
+    flds_mp = .false.
+    call NUOPC_CompAttributeGet(gcomp, name='flds_mp', value=cvalue, &
+         isPresent=isPresent, isSet=isSet, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+       read(cvalue,*) flds_mp
+    end if
+    if (my_task == master_task) then
+       write(nu_diag,*)'flds_mp = ',flds_mp
+    end if
+
     flds_wave = .false.
     call NUOPC_CompAttributeGet(gcomp, name='wav_coupling_to_cice', value=cvalue, &
          isPresent=isPresent, isSet=isSet, rc=rc)
@@ -180,6 +193,9 @@ contains
     call fldlist_add(fldsToIce_num, fldsToIce, 'Fioo_q'  )
     if (flds_wiso) then
        call fldlist_add(fldsToIce_num, fldsToIce, 'So_roce_wiso', ungridded_lbound=1, ungridded_ubound=3)
+    end if
+    if (flds_mp) then
+       call fldlist_add(fldsToIce_num, fldsToIce, 'So_roce_mp', ungridded_lbound=1, ungridded_ubound=3)
     end if
 
     ! from atmosphere
@@ -293,6 +309,10 @@ contains
             ungridded_lbound=1, ungridded_ubound=3)
        call fldlist_add(fldsFrIce_num, fldsFrIce, 'Si_qref_wiso', &
             ungridded_lbound=1, ungridded_ubound=3)
+    end if
+
+    if (flds_mp) then
+       call fldlist_add(fldsFrIce_num, fldsFrIce, 'Fioi_meltw_mp')
     end if
 
     do n = 1,fldsFrIce_num
@@ -726,7 +746,53 @@ contains
        end do
     end if
 
-    ! Sum over all dry and wet dust fluxes from ath atmosphere
+    !-------------------------------------------------------
+    ! Get microplastics from mediator
+    !-------------------------------------------------------
+
+    if (State_FldChk(importState, 'Faxa_mp')) then
+       ! the following indices are based on what the atmosphere is sending
+
+       call state_getfldptr(importState, 'Faxa_mp', fldptr=dataPtr2d, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       n = 0
+       do iblk = 1, nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo; ihi = this_block%ihi
+          jlo = this_block%jlo; jhi = this_block%jhi
+          do j = jlo, jhi
+             do i = ilo, ihi
+                n = n+1
+                fmp_atm(i,j,1,iblk)  = dataPtr2d(1,n) * med2mod_areacor(n) ! microplastics size 1
+                fmp_atm(i,j,2,iblk)  = dataptr2d(2,n) * med2mod_areacor(n) ! microplastics size 2
+                fmp_atm(i,j,3,iblk)  = dataptr2d(3,n) * med2mod_areacor(n) ! microplastics size 3
+             end do
+          end do
+       end do
+    end if
+
+    if (State_FldChk(importState, 'So_roce_mp')) then
+       ! the following indices are based on what the atmosphere is sending
+
+       call state_getfldptr(importState, 'So_roce_mp', fldptr=dataPtr2d, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       n = 0
+       do iblk = 1, nblocks
+          this_block = get_block(blocks_ice(iblk),iblk)
+          ilo = this_block%ilo; ihi = this_block%ihi
+          jlo = this_block%jlo; jhi = this_block%jhi
+          do j = jlo, jhi
+             do i = ilo, ihi
+                n = n+1
+                mp_ocn(i,j,1,iblk)  = dataPtr2d(1,n) * med2mod_areacor(n) ! microplastics size 1
+                mp_ocn(i,j,2,iblk)  = dataptr2d(2,n) * med2mod_areacor(n) ! microplastics size 2
+                mp_ocn(i,j,3,iblk)  = dataptr2d(3,n) * med2mod_areacor(n) ! microplastics size 3
+             end do
+          end do
+       end do
+    end if
+
+    ! Sum over all dry and wet dust fluxes from theatmosphere
     if (State_FldChk(importState, 'Faxa_dstwet') .and. State_FldChk(importState, 'Faxa_dstdry')) then
        call state_getfldptr(importState, 'Faxa_dstwet', fldptr=dataPtr2d_dstwet, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1301,6 +1367,23 @@ contains
             lmask=tmask, ifrac=ailohi, ungridded_index=1, areacor=mod2med_areacor, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call state_setexport(exportState, 'Fioi_meltw_wiso' , input=fiso_ocn, index=3, &
+            lmask=tmask, ifrac=ailohi, ungridded_index=2, areacor=mod2med_areacor, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    ! ------
+    ! optional microplastic fluxes to ocean
+    ! ------
+
+    if (State_FldChk(exportState, 'Fioi_meltw_mp')) then
+
+       call state_setexport(exportState, 'Fioi_meltw_mp' , input=fmp_ocn, index=1, &
+            lmask=tmask, ifrac=ailohi, ungridded_index=3, areacor=mod2med_areacor, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_setexport(exportState, 'Fioi_meltw_mp' , input=fmp_ocn, index=2, &
+            lmask=tmask, ifrac=ailohi, ungridded_index=1, areacor=mod2med_areacor, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call state_setexport(exportState, 'Fioi_meltw_mp' , input=fmp_ocn, index=3, &
             lmask=tmask, ifrac=ailohi, ungridded_index=2, areacor=mod2med_areacor, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if

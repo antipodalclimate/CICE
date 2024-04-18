@@ -20,7 +20,7 @@
       use ice_fileunits, only: flush_fileunit
       use ice_exit, only: abort_ice
       use icepack_intfc, only: icepack_warnings_flush, icepack_warnings_aborted
-      use icepack_intfc, only: icepack_max_aero, icepack_max_iso
+      use icepack_intfc, only: icepack_max_aero, icepack_max_iso, icepack_max_mp
       use icepack_intfc, only: icepack_query_parameters
       use icepack_intfc, only: icepack_query_tracer_flags
       use icepack_intfc, only: icepack_query_tracer_indices
@@ -100,6 +100,10 @@
          totaeron         , & ! total aerosol mass
          totaeros             ! total aerosol mass
 
+      real (kind=dbl_kind), dimension(icepack_max_mp) :: &
+         totmpn         , & ! total microplastic mass
+         totmps             ! total microplastic mass
+
 !=======================================================================
 
       contains
@@ -119,7 +123,7 @@
       use ice_constants, only: c1, c1000, c2, p001, p5, &
           field_loc_center, m2_to_km2
       use ice_domain, only: distrb_info, nblocks
-      use ice_domain_size, only: ncat, n_iso, n_aero, max_blocks, nfsd
+      use ice_domain_size, only: ncat, n_iso, n_aero, n_mp, max_blocks, nfsd
       use ice_flux, only: alvdr, alidr, alvdf, alidf, evap, fsnow, frazil, &
           fswabs, fswthru, flw, flwout, fsens, fsurf, flat, frzmlt_init, frain, fpond, &
           fhocn_ai, fsalt_ai, fresh_ai, frazil_diag, &
@@ -127,7 +131,7 @@
           dsnow, congel, sst, sss, Tf, fhocn, &
           swvdr, swvdf, swidr, swidf, &
           alvdr_init, alvdf_init, alidr_init, alidf_init
-      use ice_flux_bgc, only: faero_atm, faero_ocn, fiso_atm, fiso_ocn
+      use ice_flux_bgc, only: faero_atm, faero_ocn, fiso_atm, fiso_ocn, fmp_atm, fmp_ocn
       use ice_global_reductions, only: global_sum, global_sum_prod, global_maxval
       use ice_grid, only: lmask_n, lmask_s, tarean, tareas, grid_ice, grid_average_X2Y
       use ice_state   ! everything
@@ -144,11 +148,11 @@
       integer (kind=int_kind) :: &
          i, j, k, n, iblk, nc, &
          ktherm, &
-         nt_tsfc, nt_aero, nt_fbri, nt_apnd, nt_hpnd, nt_fsd, &
+         nt_tsfc, nt_aero, nt_mp, nt_fbri, nt_apnd, nt_hpnd, nt_fsd, &
          nt_isosno, nt_isoice, nt_rsnw, nt_rhos, nt_smice, nt_smliq
 
       logical (kind=log_kind) :: &
-         tr_pond_topo, tr_brine, tr_iso, tr_aero, calc_Tsfc, tr_fsd, &
+         tr_pond_topo, tr_brine, tr_iso, tr_aero, tr_mp, calc_Tsfc, tr_fsd, &
          tr_snow, snwgrain
 
       real (kind=dbl_kind) :: &
@@ -193,6 +197,13 @@
          aeromx1n, aeromx1s, &
          aerototn, aerotots
 
+      ! microplastic diagnostics
+      real (kind=dbl_kind), dimension(icepack_max_mp) :: &
+         fmpan, fmpon, mprn, &
+         fmpas, fmpos, mprs, &
+         mpmx1n, mpmx1s, &
+         mptotn, mptots
+
       ! fields at diagnostic points
       real (kind=dbl_kind), dimension(npnt) :: &
          paice, pTair, pQa, pfsnow, pfrain, pfsw, pflw, &
@@ -218,10 +229,12 @@
 
       call icepack_query_parameters(ktherm_out=ktherm, calc_Tsfc_out=calc_Tsfc)
       call icepack_query_tracer_flags(tr_brine_out=tr_brine, tr_aero_out=tr_aero, &
+           tr_mp_out=tr_mp, &
            tr_pond_topo_out=tr_pond_topo, tr_fsd_out=tr_fsd, tr_iso_out=tr_iso, &
            tr_snow_out=tr_snow)
       call icepack_query_tracer_indices(nt_fbri_out=nt_fbri, nt_Tsfc_out=nt_Tsfc, &
            nt_aero_out=nt_aero, nt_apnd_out=nt_apnd, nt_hpnd_out=nt_hpnd, &
+           nt_mp_out=nt_mp, &
            nt_fsd_out=nt_fsd,nt_isosno_out=nt_isosno, nt_isoice_out=nt_isoice, &
            nt_rsnw_out=nt_rsnw, nt_rhos_out=nt_rhos, &
            nt_smice_out=nt_smice, nt_smliq_out=nt_smliq)
@@ -922,6 +935,58 @@
          enddo ! n_aero
          endif ! tr_aero
 
+         ! microplastics
+         if (tr_mp) then
+         fmpan = c0
+         fmpas = c0
+         fmpon = c0
+         fmpos = c0
+         mptotn = c0
+         mptots = c0
+         mpmx1n = c0
+         mpmx1s = c0
+         mprn = c0
+         mprs = c0
+         do n = 1, n_mp
+            fmpan(n) = global_sum_prod(fmp_atm(:,:,n,:), aice_init, &
+                                        distrb_info, field_loc_center, tarean)
+            fmpas(n) = global_sum_prod(fmp_atm(:,:,n,:), aice_init, &
+                                        distrb_info, field_loc_center, tareas)
+            fmpan(n) = fmpan(n)*dt
+            fmpas(n) = fmpas(n)*dt
+            fmpon(n) = global_sum_prod(fmp_ocn(:,:,n,:), aice, &
+                                        distrb_info, field_loc_center, tarean)
+            fmpos(n) = global_sum_prod(fmp_ocn(:,:,n,:), aice, &
+                                        distrb_info, field_loc_center, tareas)
+            fmpon(n) = fmpon(n)*dt
+            fmpos(n) = fmpos(n)*dt
+
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j)
+            do iblk = 1, nblocks
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  work1(i,j,iblk) = &
+                   trcr(i,j,nt_mp  +4*(n-1),iblk)*vsno(i,j,iblk) &
+                 + trcr(i,j,nt_mp+1+4*(n-1),iblk)*vsno(i,j,iblk) &
+                 + trcr(i,j,nt_mp+2+4*(n-1),iblk)*vice(i,j,iblk) &
+                 + trcr(i,j,nt_mp+3+4*(n-1),iblk)*vice(i,j,iblk)
+               enddo
+               enddo
+            enddo
+            !$OMP END PARALLEL DO
+            mptotn(n) = global_sum(work1, distrb_info, field_loc_center, tarean)
+            mptots(n) = global_sum(work1, distrb_info, field_loc_center, tareas)
+            mpmx1n(n) = global_maxval(work1, distrb_info, lmask_n)
+            mpmx1s(n) = global_maxval(work1, distrb_info, lmask_s)
+            if (mpmx1n(n) < maxval_spval) mpmx1n(n) = c0
+            if (mpmx1s(n) < maxval_spval) mpmx1s(n) = c0
+
+            mprn(n) = (totmpn(n)-mptotn(n)+fmpan(n)-fmpon(n)) &
+                                 / (mptotn(n) + c1)
+            mprs(n) = (totmps(n)-mptots(n)+fmpas(n)-fmpos(n)) &
+                                 / (mptots(n) + c1)
+         enddo ! n_mp
+         endif ! tr_mp
       endif                     ! print_global
 
       if (print_points) then
@@ -1163,6 +1228,17 @@
          enddo
          write(nu_diag,*) '----------------------------'
          endif ! tr_aero
+         if (tr_mp) then
+         do n = 1, n_mp
+         write(nu_diag,*)   ' microplastic ',n
+         write(nu_diag,901) 'fmp_atm (kg/m2)                 = ', fmpan(n), fmpas(n)
+         write(nu_diag,901) 'fmp_ocn (kg/m2)                 = ', fmpon(n), fmpos(n)
+         write(nu_diag,901) 'total microplastics (kg/m2)     = ', mptotn(n), mptots(n)
+         write(nu_diag,901) 'mp  error                       = ', mprn(n), mprs(n)
+         write(nu_diag,901) 'maximum mp  (kg/m2)             = ', mpmx1n(n),mpmx1s(n)
+         enddo
+         write(nu_diag,*) '----------------------------'
+         endif ! tr_mp
 
         endif                    ! print_global
 
@@ -1281,16 +1357,16 @@
 
       use ice_constants, only: field_loc_center
       use ice_domain, only: distrb_info, nblocks
-      use ice_domain_size, only: n_iso, n_aero, ncat, max_blocks
+      use ice_domain_size, only: n_iso, n_aero, n_mp, ncat, max_blocks
       use ice_global_reductions, only: global_sum
       use ice_grid, only: tareas, tarean
       use ice_state, only: aicen, vice, vsno, trcrn, trcr
 
       integer (kind=int_kind) :: n, i, j, k, iblk, &
-         nt_hpnd, nt_apnd, nt_aero, nt_isosno, nt_isoice
+         nt_hpnd, nt_apnd, nt_aero, nt_mp, nt_isosno, nt_isoice
 
       logical (kind=log_kind) :: &
-         tr_iso, tr_aero, tr_pond_topo
+         tr_iso, tr_aero, tr_mp, tr_pond_topo
 
       real (kind=dbl_kind) :: &
          shmaxn, snwmxn,  shmaxs, snwmxs, totpn, totps, &
@@ -1303,8 +1379,9 @@
 
       call icepack_query_tracer_flags(tr_aero_out=tr_aero, tr_pond_topo_out=tr_pond_topo)
       call icepack_query_tracer_flags(tr_iso_out=tr_iso)
+      call icepack_query_tracer_flags(tr_mp_out=tr_mp)
       call icepack_query_tracer_indices(nt_isosno_out=nt_isosno, nt_isoice_out=nt_isoice, &
-         nt_hpnd_out=nt_hpnd, nt_apnd_out=nt_apnd, nt_aero_out=nt_aero)
+         nt_hpnd_out=nt_hpnd, nt_apnd_out=nt_apnd, nt_aero_out=nt_aero, nt_mp_out=nt_mp)
       call icepack_query_parameters( &
          rhoi_out=rhoi, rhos_out=rhos, rhofresh_out=rhofresh)
       call icepack_warnings_flush(nu_diag)
@@ -1389,6 +1466,26 @@
             !$OMP END PARALLEL DO
             totaeron(n)= global_sum(work1, distrb_info, field_loc_center, tarean)
             totaeros(n)= global_sum(work1, distrb_info, field_loc_center, tareas)
+         enddo
+      endif
+
+
+      if (tr_mp) then
+         do n=1,n_mp
+            !$OMP PARALLEL DO PRIVATE(iblk,i,j)
+            do iblk = 1, nblocks
+               do j = 1, ny_block
+               do i = 1, nx_block
+                  work1(i,j,iblk) = trcr(i,j,nt_mp  +4*(n-1),iblk)*vsno(i,j,iblk) &
+                                  + trcr(i,j,nt_mp+1+4*(n-1),iblk)*vsno(i,j,iblk) &
+                                  + trcr(i,j,nt_mp+2+4*(n-1),iblk)*vice(i,j,iblk) &
+                                  + trcr(i,j,nt_mp+3+4*(n-1),iblk)*vice(i,j,iblk)
+               enddo
+               enddo
+            enddo
+            !$OMP END PARALLEL DO
+            totmpn(n)= global_sum(work1, distrb_info, field_loc_center, tarean)
+            totmps(n)= global_sum(work1, distrb_info, field_loc_center, tareas)
          enddo
       endif
 

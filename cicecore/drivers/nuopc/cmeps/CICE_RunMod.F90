@@ -23,7 +23,7 @@
       use ice_constants, only: field_loc_center, field_type_scalar
       use ice_exit, only: abort_ice
       use icepack_intfc, only: icepack_warnings_flush, icepack_warnings_aborted
-      use icepack_intfc, only: icepack_max_iso, icepack_max_aero
+      use icepack_intfc, only: icepack_max_iso, icepack_max_aero, icepack_max_mp
       use icepack_intfc, only: icepack_query_parameters
       use icepack_intfc, only: icepack_query_tracer_flags, icepack_query_tracer_sizes
 
@@ -49,12 +49,12 @@
       use ice_forcing, only: get_forcing_atmo, get_forcing_ocn, &
           get_wave_spec
       use ice_forcing_bgc, only: get_forcing_bgc, get_atm_bgc, &
-          fiso_default, faero_default
+          fiso_default, faero_default, fmp_default
       use ice_flux, only: init_flux_atm, init_flux_ocn
       use ice_timers, only: ice_timer_start, ice_timer_stop, &
           timer_couple, timer_step
       logical (kind=log_kind) :: &
-          tr_iso, tr_aero, tr_zaero, skl_bgc, z_tracers, wave_spec, tr_fsd
+          tr_iso, tr_aero, tr_mp, tr_zaero, skl_bgc, z_tracers, wave_spec, tr_fsd
       character(len=*), parameter :: subname = '(CICE_Run)'
 
       !--------------------------------------------------------------------
@@ -68,6 +68,7 @@
                                     wave_spec_out=wave_spec)
       call icepack_query_tracer_flags(tr_iso_out=tr_iso, &
                                       tr_aero_out=tr_aero, &
+                                      tr_mp_out=tr_mp, &
                                       tr_zaero_out=tr_zaero, &
                                       tr_fsd_out=tr_fsd)
       call icepack_warnings_flush(nu_diag)
@@ -125,7 +126,7 @@
       use ice_restart, only: final_restart
       use ice_restart_column, only: write_restart_age, write_restart_FY, &
           write_restart_lvl, write_restart_pond_lvl, &
-          write_restart_pond_topo, write_restart_aero, write_restart_fsd, &
+          write_restart_pond_topo, write_restart_aero, write_restart_mp, write_restart_fsd, &
           write_restart_iso, write_restart_bgc, write_restart_hbrine, &
           write_restart_snow
       use ice_restart_driver, only: dumpfile
@@ -149,7 +150,7 @@
 
       logical (kind=log_kind) :: &
           tr_iage, tr_FY, tr_lvl, tr_fsd, tr_snow, &
-          tr_pond_lvl, tr_pond_topo, tr_brine, tr_iso, tr_aero, &
+          tr_pond_lvl, tr_pond_topo, tr_brine, tr_iso, tr_aero, tr_mp, &
           calc_Tsfc, skl_bgc, z_tracers, wave_spec
 
       character(len=*), parameter :: subname = '(ice_step)'
@@ -170,6 +171,7 @@
       call icepack_query_tracer_flags(tr_iage_out=tr_iage, tr_FY_out=tr_FY, &
            tr_lvl_out=tr_lvl, tr_pond_lvl_out=tr_pond_lvl, &
            tr_pond_topo_out=tr_pond_topo, tr_brine_out=tr_brine, tr_aero_out=tr_aero, &
+           tr_mp_out=tr_mp, &
            tr_iso_out=tr_iso, tr_fsd_out=tr_fsd, tr_snow_out=tr_snow)
       call icepack_warnings_flush(nu_diag)
       if (icepack_warnings_aborted()) call abort_ice(error_message=subname, &
@@ -381,6 +383,7 @@
             if (tr_fsd)       call write_restart_fsd
             if (tr_iso)       call write_restart_iso
             if (tr_aero)      call write_restart_aero
+            if (tr_mp)        call write_restart_mp
             if (skl_bgc .or. z_tracers) &
                               call write_restart_bgc
             if (tr_brine)     call write_restart_hbrine
@@ -424,6 +427,7 @@
           fsens, flat, fswabs, flwout, evap, Tref, Qref, &
           scale_fluxes, frzmlt_init, frzmlt, Uref, wind
       use ice_flux_bgc, only: faero_ocn, fiso_ocn, Qref_iso, fiso_evap, &
+          fmp_ocn, mp_ocn, &
           flux_bio, flux_bio_ai, fnit, fsil, famm, fdmsp, fdms, fhum, &
           fdust, falgalN, fdoc, fdic, fdon, ffep, ffed, bgcflux_ice_to_ocn
       use ice_grid, only: tmask
@@ -621,6 +625,7 @@
                             fswthru_idr(:,:,iblk),                   &
                             fswthru_idf(:,:,iblk),                   &
                             faero_ocn(:,:,:,iblk),                   &
+                            fmp_ocn(:,:,:,iblk),                   &
                             alvdr    (:,:,iblk), alidr   (:,:,iblk), &
                             alvdf    (:,:,iblk), alidf   (:,:,iblk), &
                             flux_bio (:,:,1:nbtrcr,iblk),            &

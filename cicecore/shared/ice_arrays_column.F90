@@ -265,7 +265,7 @@
       subroutine alloc_arrays_column
         ! Allocate column arrays
         use ice_exit, only: abort_ice
-        integer (int_kind) :: max_nbtrcr, max_algae, max_aero, &
+        integer (int_kind) :: max_nbtrcr, max_algae, max_aero, max_mp, &
            nmodal1, nmodal2, max_don
         integer (int_kind) :: ierr, ntrcr
 
@@ -273,7 +273,7 @@
 
       call icepack_query_tracer_sizes(ntrcr_out=ntrcr)
       call icepack_query_tracer_sizes( max_nbtrcr_out=max_nbtrcr, &
-         max_algae_out=max_algae, max_aero_out=max_aero, &
+         max_algae_out=max_algae, max_aero_out=max_aero, max_mp_out=max_mp, &
          nmodal1_out=nmodal1, nmodal2_out=nmodal2, max_don_out=max_don)
       call icepack_warnings_flush(nu_diag)
       if (icepack_warnings_aborted()) call abort_ice(error_message=subname, &

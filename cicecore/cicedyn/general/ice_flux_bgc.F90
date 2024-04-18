@@ -12,7 +12,7 @@
       use ice_fileunits, only: nu_diag
       use ice_exit, only: abort_ice
       use icepack_intfc, only: icepack_warnings_flush, icepack_warnings_aborted
-      use icepack_intfc, only: icepack_max_iso, icepack_max_aero, icepack_max_nbtrcr, &
+      use icepack_intfc, only: icepack_max_iso, icepack_max_mp, icepack_max_aero, icepack_max_nbtrcr, &
           icepack_max_algae, icepack_max_doc, icepack_max_don, icepack_max_dic, icepack_max_fe, &
           icepack_query_tracer_indices, icepack_query_tracer_flags, icepack_query_parameters
 
@@ -26,6 +26,7 @@
       real (kind=dbl_kind), &   ! coupling variable for both tr_aero and tr_zaero
          dimension (:,:,:,:), allocatable, public :: &
          fiso_atm, & ! isotope deposition rate (kg/m^2 s)
+         fmp_atm, & ! microplasticdeposition rate (kg/m^2 s)
          faero_atm   ! aerosol deposition rate (kg/m^2 s)
 
       real (kind=dbl_kind), &
@@ -37,6 +38,7 @@
       real (kind=dbl_kind), &
          dimension (:,:,:,:), allocatable, public :: &
          fiso_ocn, & ! isotope flux to ocean  (kg/m^2/s)
+         fmp_ocn, & ! microplastic flux to ocean  (kg/m^2/s)
          faero_ocn   ! aerosol flux to ocean  (kg/m^2/s)
 
       real (kind=dbl_kind), &
@@ -104,6 +106,10 @@
          H2_16O_ocn, & ! seawater concentration of H2_16O (kg/kg)
          H2_18O_ocn    ! seawater concentration of H2_18O (kg/kg)
 
+      real (kind=dbl_kind), &   ! coupling variable for tr_mp
+         dimension (:,:,:,:), allocatable, public :: &
+         mp_ocn        ! microplastic concentration in ocean
+
 !=======================================================================
 
       contains
@@ -132,6 +138,7 @@
          fdust       (nx_block,ny_block,max_blocks), & ! ice-ocean dust flux (kg/m^2/s), positive to ocean
          hin_old     (nx_block,ny_block,ncat,max_blocks), & ! old ice thickness
          dsnown      (nx_block,ny_block,ncat,max_blocks), & ! change in snow thickness in category n (m)
+         mp_ocn      (nx_block,ny_block,icepack_max_mp,max_blocks), & ! seawater concentration of microplastics (kg / kg)
          HDO_ocn     (nx_block,ny_block,max_blocks), & ! seawater concentration of HDO (kg/kg)
          H2_16O_ocn  (nx_block,ny_block,max_blocks), & ! seawater concentration of H2_16O (kg/kg)
          H2_18O_ocn  (nx_block,ny_block,max_blocks), & ! seawater concentration of H2_18O (kg/kg)
@@ -142,6 +149,8 @@
          fiso_ocn    (nx_block,ny_block,icepack_max_iso,max_blocks), & ! isotope flux to ocean  (kg/m^2/s)
          faero_atm   (nx_block,ny_block,icepack_max_aero,max_blocks), & ! aerosol deposition rate (kg/m^2 s)
          faero_ocn   (nx_block,ny_block,icepack_max_aero,max_blocks), & ! aerosol flux to ocean  (kg/m^2/s)
+         fmp_atm     (nx_block,ny_block,icepack_max_mp,max_blocks), & ! microplastic deposition rate (kg/m^2 s)
+         fmp_ocn     (nx_block,ny_block,icepack_max_mp,max_blocks), & ! microplastic flux to ocean  (kg/m^2/s)
          zaeros      (nx_block,ny_block,icepack_max_aero,max_blocks), & ! ocean aerosols (mmol/m^3)
          flux_bio_atm(nx_block,ny_block,icepack_max_nbtrcr,max_blocks), & ! all bio fluxes to ice from atmosphere
          flux_bio    (nx_block,ny_block,icepack_max_nbtrcr,max_blocks), & ! all bio fluxes to ocean

@@ -14,13 +14,13 @@
       use ice_fileunits, only: nu_diag
       use ice_exit, only: abort_ice
       use icepack_intfc, only: icepack_warnings_flush, icepack_warnings_aborted
-      use icepack_intfc, only: icepack_max_iso, icepack_max_aero, &
+      use icepack_intfc, only: icepack_max_iso, icepack_max_aero, icepack_max_mp, &
           icepack_max_dic, icepack_max_doc, icepack_max_don, &
           icepack_max_algae, icepack_max_fe
       use icepack_intfc, only: icepack_query_tracer_flags, &
           icepack_query_tracer_indices, icepack_query_parameters, &
           icepack_query_parameters
-      use ice_domain_size, only: max_nstrm, n_iso, n_aero, &
+      use ice_domain_size, only: max_nstrm, n_iso, n_aero, n_mp, &
           n_algae, n_dic, n_doc, n_don, n_zaero, n_fed, n_fep
 
       implicit none
@@ -37,6 +37,8 @@
       character (len=max_nstrm), public :: &
            f_fiso_atm     = 'x', f_fiso_ocn     = 'x', &
            f_iso          = 'x', &
+           f_fmp_atm     = 'x', f_fmp_ocn     = 'x', &
+           f_mp          = 'x', &
            f_faero_atm    = 'x', f_faero_ocn    = 'x', &
            f_aero         = 'x', &
            f_fbio         = 'x', f_fbio_ai      = 'x', &
@@ -125,6 +127,8 @@
       namelist / icefields_bgc_nml /     &
            f_fiso_atm    , f_fiso_ocn    , &
            f_iso         , &
+           f_fmp_atm    , f_fmp_ocn    , &
+           f_mp         , &
            f_faero_atm   , f_faero_ocn   , &
            f_aero        , &
            f_fbio        , f_fbio_ai     , &
@@ -155,6 +159,14 @@
            n_fiso_ocn    , &
            n_isosno      , &
            n_isoice
+
+      integer(kind=int_kind), dimension(icepack_max_mp,max_nstrm) :: &
+           n_fmp_atm    , &
+           n_fmp_ocn    , &
+           n_mpsn1      , &
+           n_mpsn2      , &
+           n_mpic1      , &
+           n_mpic2 
 
       integer(kind=int_kind), dimension(icepack_max_aero,max_nstrm) :: &
            n_faero_atm    , &
@@ -268,7 +280,7 @@
       integer (kind=int_kind) :: nml_error ! namelist i/o error flag
       character (len=3) :: nchar
       character (len=16) :: vname_in     ! variable name
-      logical (kind=log_kind) :: tr_zaero, tr_aero, tr_brine, tr_iso, &
+      logical (kind=log_kind) :: tr_zaero, tr_aero, tr_brine, tr_iso, tr_mp, &
           tr_bgc_Nit,    tr_bgc_Am,    tr_bgc_Sil,   &
           tr_bgc_DMS,    tr_bgc_PON,                 &
           tr_bgc_N,      tr_bgc_C,     tr_bgc_chl,   &
@@ -285,6 +297,7 @@
       call icepack_query_tracer_flags( &
           tr_iso_out    =tr_iso,     tr_zaero_out  =tr_zaero, &
           tr_aero_out   =tr_aero,    tr_brine_out  =tr_brine, &
+          tr_mp_out     =tr_mp, &
           tr_bgc_Nit_out=tr_bgc_Nit, tr_bgc_Am_out =tr_bgc_Am, &
           tr_bgc_Sil_out=tr_bgc_Sil, tr_bgc_DMS_out=tr_bgc_DMS, &
           tr_bgc_PON_out=tr_bgc_PON, &
@@ -347,6 +360,12 @@
          f_faero_atm = 'x'
          f_faero_ocn = 'x'
          f_aero      = 'x'
+      endif
+
+      if (.not. tr_mp) then
+         f_fmp_atm = 'x'
+         f_fmp_ocn = 'x'
+         f_mp      = 'x'
       endif
 
       if (.not. tr_brine)  then
@@ -623,6 +642,9 @@
       call broadcast_scalar (f_fiso_atm,     master_task)
       call broadcast_scalar (f_fiso_ocn,     master_task)
       call broadcast_scalar (f_iso,          master_task)
+      call broadcast_scalar (f_fmp_atm,     master_task)
+      call broadcast_scalar (f_fmp_ocn,     master_task)
+      call broadcast_scalar (f_mp,          master_task)
       call broadcast_scalar (f_faero_atm,    master_task)
       call broadcast_scalar (f_faero_ocn,    master_task)
       call broadcast_scalar (f_aero,         master_task)
@@ -766,7 +788,7 @@
 
       ! 2D variables
 
-     if (tr_iso .or. tr_aero .or. tr_brine .or. skl_bgc) then
+     if (tr_iso .or. tr_aero .or. tr_mp .or. tr_brine .or. skl_bgc) then
 
      do ns = 1, nstreams
        if (histfreq(ns) /= 'x') then
@@ -845,6 +867,49 @@
             call define_hist_field(n_faero_ocn(n,:),vname_in,"kg/m^2 s", &
                 tstr2D, tcstr,"aerosol flux to ocean","none", c1, c0,    &
                 ns, f_faero_ocn)
+         enddo
+      endif
+
+      ! Microplastics
+      if (f_mp(1:1) /= 'x') then
+         do n=1,n_mp
+            write(nchar,'(i3.3)') n
+            write(vname_in,'(a,a)') 'mpsnossl', trim(nchar)
+            call define_hist_field(n_mpsn1(n,:),vname_in,"kg/kg",   &
+                tstr2D, tcstr,"snow ssl microplastic mass","none", c1, c0, &
+                ns, f_mp)
+            write(vname_in,'(a,a)') 'mpsnoint', trim(nchar)
+            call define_hist_field(n_mpsn2(n,:),vname_in,"kg/kg",   &
+                tstr2D, tcstr,"snow int microplastic mass","none", c1, c0, &
+                ns, f_mp)
+            write(vname_in,'(a,a)') 'mpicessl', trim(nchar)
+            call define_hist_field(n_mpic1(n,:),vname_in,"kg/kg",  &
+                tstr2D, tcstr,"ice ssl microplastic mass","none", c1, c0, &
+                ns, f_mp)
+            write(vname_in,'(a,a)') 'mpiceint', trim(nchar)
+            call define_hist_field(n_mpic2(n,:),vname_in,"kg/kg",  &
+                tstr2D, tcstr,"ice int microplastic mass","none", c1, c0, &
+                ns, f_mp)
+         enddo
+      endif
+
+      if (f_fmp_atm(1:1) /= 'x') then
+         do n=1,n_mp
+            write(nchar,'(i3.3)') n
+            write(vname_in,'(a,a)') 'fmp_atm', trim(nchar)
+            call define_hist_field(n_fmp_atm(n,:),vname_in,"kg/m^2 s", &
+                tstr2D, tcstr,"microplastic deposition rate","none", c1, c0,  &
+                ns, f_fmp_atm)
+         enddo
+      endif
+
+      if (f_fmp_ocn(1:1) /= 'x') then
+         do n=1,n_mp
+            write(nchar,'(i3.3)') n
+            write(vname_in,'(a,a)') 'fmp_ocn', trim(nchar)
+            call define_hist_field(n_fmp_ocn(n,:),vname_in,"kg/m^2 s", &
+                tstr2D, tcstr,"microplastic flux to ocean","none", c1, c0,    &
+                ns, f_fmp_ocn)
          enddo
       endif
 
@@ -1854,7 +1919,7 @@
       use ice_domain_size, only: nblyr
       use ice_flux, only: sss
       use ice_flux_bgc, only: fiso_atm, fiso_ocn, faero_atm, faero_ocn, &
-          flux_bio, flux_bio_ai
+          flux_bio, flux_bio_ai, fmp_atm, fmp_ocn
       use ice_history_shared, only: n2D, a2D, a3Dc, &
           n3Dzcum, n3Dbcum, a3Db, a3Da, &
           ncat_hist, accum_hist_field, nzblyr, nzalyr
@@ -1887,10 +1952,10 @@
          workii
 
       logical (kind=log_kind) :: &
-         skl_bgc, z_tracers, tr_iso, tr_aero, tr_brine
+         skl_bgc, z_tracers, tr_iso, tr_aero, tr_mp, tr_brine
 
       integer(kind=int_kind) :: &
-         nt_isosno,     nt_isoice,  nt_aero,    nt_fbri,      &
+         nt_isosno,     nt_isoice,  nt_aero, nt_mp,   nt_fbri,      &
          nt_bgc_Nit,    nt_bgc_Am,  nt_bgc_Sil, nt_bgc_DMSPp, &
          nt_bgc_DMSPd,  nt_bgc_DMS, nt_bgc_PON,               &
          nt_zbgc_frac,  nlt_chl_sw,                           &
@@ -1930,13 +1995,13 @@
 
       call icepack_query_parameters(rhos_out=rhos, rhoi_out=rhoi, &
          rhow_out=rhow, puny_out=puny, sk_l_out=sk_l)
-      call icepack_query_tracer_flags(tr_iso_out=tr_iso, &
+      call icepack_query_tracer_flags(tr_iso_out=tr_iso, tr_mp_out=tr_mp, &
          tr_aero_out=tr_aero, tr_brine_out=tr_brine)
       call icepack_query_parameters(skl_bgc_out=skl_bgc, &
          z_tracers_out=z_tracers)
       call icepack_query_tracer_indices( &
          nt_isosno_out=nt_isosno, nt_isoice_out=nt_isoice, &
-         nt_aero_out=nt_aero, &
+         nt_aero_out=nt_aero, nt_mp_out=nt_mp, &
          nt_fbri_out=nt_fbri, nt_bgc_DOC_out=nt_bgc_DOC, &
          nt_zaero_out=nt_zaero, nt_bgc_DIC_out=nt_bgc_DIC, &
          nt_bgc_DON_out=nt_bgc_DON, nt_bgc_N_out=nt_bgc_N, &
@@ -1975,7 +2040,7 @@
      ! 2d bgc fields
      if (allocated(a2D)) then
 
-     if (tr_iso .or. tr_aero .or. tr_brine .or. skl_bgc) then
+     if (tr_iso .or. tr_aero .or. tr_mp .or. tr_brine .or. skl_bgc) then
 
       ! isotopes
       if (f_fiso_atm(1:1) /= 'x') then
@@ -2022,6 +2087,32 @@
                                trcr(:,:,nt_aero+2+4*(n-1),iblk)/rhoi, a2D)
             call accum_hist_field(n_aeroic2(n,:), iblk, &
                                trcr(:,:,nt_aero+3+4*(n-1),iblk)/rhoi, a2D)
+         enddo
+      endif
+
+      ! Microplastics
+      if (f_fmp_atm(1:1) /= 'x') then
+         do n=1,n_mp
+            call accum_hist_field(n_fmp_atm(n,:),iblk, &
+                                    fmp_atm(:,:,n,iblk), a2D)
+         enddo
+      endif
+      if (f_fmp_ocn(1:1) /= 'x') then
+         do n=1,n_mp
+            call accum_hist_field(n_fmp_ocn(n,:),iblk, &
+                                    fmp_ocn(:,:,n,iblk), a2D)
+         enddo
+      endif
+      if (f_mp(1:1) /= 'x') then
+         do n=1,n_mp
+            call accum_hist_field(n_mpsn1(n,:), iblk, &
+                               trcr(:,:,nt_mp  +4*(n-1),iblk)/rhos, a2D)
+            call accum_hist_field(n_mpsn2(n,:), iblk, &
+                               trcr(:,:,nt_mp+1+4*(n-1),iblk)/rhos, a2D)
+            call accum_hist_field(n_mpic1(n,:), iblk, &
+                               trcr(:,:,nt_mp+2+4*(n-1),iblk)/rhoi, a2D)
+            call accum_hist_field(n_mpic2(n,:), iblk, &
+                               trcr(:,:,nt_mp+3+4*(n-1),iblk)/rhoi, a2D)
          enddo
       endif
 
@@ -2584,7 +2675,7 @@
          call accum_hist_field(n_hbri,     iblk, &
                         hbri(:,:,iblk), a2D)
 
-     endif ! 2d bgc tracers, tr_aero, tr_brine, skl_bgc
+     endif ! 2d bgc tracers, tr_aero, tr_mp, tr_brine, skl_bgc
      endif ! allocated(a2D)
 
       ! 3D category fields

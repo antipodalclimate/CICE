@@ -35,6 +35,7 @@
         nblyr     , & ! number of bio/brine layers per category
         n_iso     , & ! number of isotopes in use
         n_aero    , & ! number of aerosols in use
+        n_mp      , & ! number of microplastics in use
         n_zaero   , & ! number of z aerosols in use
         n_algae   , & ! number of algae in use
         n_doc     , & ! number of DOC pools in use

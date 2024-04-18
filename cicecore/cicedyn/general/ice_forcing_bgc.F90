@@ -32,7 +32,7 @@
       implicit none
       private
       public :: get_forcing_bgc, get_atm_bgc, fzaero_data, alloc_forcing_bgc, &
-                init_bgc_data, faero_data, faero_default, fiso_default
+                init_bgc_data, faero_data, faero_default, fiso_default, fmp_default
 
       integer (kind=int_kind) :: &
          bgcrecnum = 0   ! old record number (save between steps)
@@ -553,6 +553,22 @@
       fiso_atm(:,:,:,:) = 1.e-14_dbl_kind ! kg/m^2 s
 
       end subroutine fiso_default
+
+!=======================================================================
+
+! constant values for atmospheric microplastics
+!
+! authors: David Bailey, NCAR
+
+      subroutine fmp_default
+
+      use ice_flux_bgc, only: fmp_atm
+      character(len=*), parameter :: subname='(fmp_default)'
+
+!     fmp_atm(:,:,:,:) = 1.e-14_dbl_kind ! kg/m^2 s
+      fmp_atm(:,:,:,:) = c0
+
+      end subroutine fmp_default
 
 !=======================================================================
 

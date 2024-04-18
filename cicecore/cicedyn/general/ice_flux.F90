@@ -634,6 +634,7 @@
 
       use ice_arrays_column, only: Cdn_atm
       use ice_flux_bgc, only: flux_bio_atm, flux_bio, faero_atm, fiso_atm, &
+           fmp_atm, &
            fnit, famm, fsil, fdmsp, fdms, fhum, fdust, falgalN, &
            fdoc, fdon, fdic, ffed, ffep
       use ice_grid, only: bathymetry
@@ -726,6 +727,7 @@
       endif !
 
       fiso_atm  (:,:,:,:) = c0           ! isotope deposition rate (kg/m2/s)
+      fmp_atm  (:,:,:,:) = c0           ! microplastic deposition rate (kg/m2/s)
       faero_atm (:,:,:,:) = c0           ! aerosol deposition rate (kg/m2/s)
       flux_bio_atm (:,:,:,:) = c0        ! zaero and bio deposition rate (kg/m2/s)
 
@@ -883,7 +885,8 @@
 
       subroutine init_flux_ocn
 
-      use ice_flux_bgc, only: faero_ocn, fiso_ocn, HDO_ocn, H2_16O_ocn, H2_18O_ocn
+      use ice_flux_bgc, only: faero_ocn, fmp_ocn, fiso_ocn, HDO_ocn, H2_16O_ocn, H2_18O_ocn
+      use ice_flux_bgc, only: mp_ocn
 
       character(len=*), parameter :: subname = '(init_flux_ocn)'
 
@@ -906,6 +909,8 @@
       HDO_ocn     (:,:,:) = c0
       H2_16O_ocn  (:,:,:) = c0
       H2_18O_ocn  (:,:,:) = c0
+      fmp_ocn   (:,:,:,:) = c0
+      mp_ocn    (:,:,:,:) = 8.5e-5_dbl_kind ! microplastics concentration in the ocean kg/kg
 
       if (send_i2x_per_cat) then
          fswthrun_ai(:,:,:,:) = c0
@@ -1134,6 +1139,7 @@
                                fswthru_vdr, fswthru_vdf, &
                                fswthru_idr, fswthru_idf, &
                                faero_ocn,          &
+                               fmp_ocn,          &
                                alvdr,    alidr,    &
                                alvdf,    alidf,    &
                                flux_bio,           &
@@ -1142,7 +1148,7 @@
                                Qref_iso,           &
                                fiso_evap,fiso_ocn)
 
-      use icepack_intfc, only: icepack_max_iso
+      use icepack_intfc, only: icepack_max_iso, icepack_max_mp
 
       integer (kind=int_kind), intent(in) :: &
           nx_block, ny_block, &    ! block dimensions
@@ -1193,6 +1199,9 @@
 
       real (kind=dbl_kind), dimension(nx_block,ny_block,max_aero), intent(inout) :: &
           faero_ocn   ! aerosol flux to ocean            (kg/m2/s)
+
+      real (kind=dbl_kind), dimension(nx_block,ny_block,icepack_max_mp), intent(inout), optional :: &
+          fmp_ocn   ! microplastic flux to ocean            (kg/m2/s)
 
       ! For hadgem drivers. Assumes either both fields are passed or neither
       real (kind=dbl_kind), dimension(nx_block,ny_block), intent(inout), optional :: &
@@ -1256,6 +1265,7 @@
             if (present(Qref_iso )) Qref_iso (i,j,:) = Qref_iso (i,j,:) * ar
             if (present(fiso_evap)) fiso_evap(i,j,:) = fiso_evap(i,j,:) * ar
             if (present(fiso_ocn )) fiso_ocn (i,j,:) = fiso_ocn (i,j,:) * ar
+            if (present(fmp_ocn )) fmp_ocn (i,j,:) = fmp_ocn (i,j,:) * ar
          else                   ! zero out fluxes
             strairxT(i,j) = c0
             strairyT(i,j) = c0
@@ -1286,6 +1296,7 @@
             if (present(Qref_iso )) Qref_iso (i,j,:) = c0
             if (present(fiso_evap)) fiso_evap(i,j,:) = c0
             if (present(fiso_ocn )) fiso_ocn (i,j,:) = c0
+            if (present(fmp_ocn )) fmp_ocn (i,j,:) = c0
          endif                  ! tmask and aice > 0
       enddo                     ! i
       enddo                     ! j

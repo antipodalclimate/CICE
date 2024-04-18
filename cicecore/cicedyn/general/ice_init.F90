@@ -66,7 +66,7 @@
       use ice_domain, only: close_boundaries, orca_halogrid
       use ice_domain_size, only: &
           ncat, nilyr, nslyr, nblyr, nfsd, nfreq, &
-          n_iso, n_aero, n_zaero, n_algae, &
+          n_iso, n_aero, n_mp, n_zaero, n_algae, &
           n_doc, n_dic, n_don, n_fed, n_fep, &
           max_nstrm
       use ice_calendar, only: &
@@ -78,7 +78,7 @@
       use ice_arrays_column, only: oceanmixed_ice
       use ice_restart_column, only: &
           restart_age, restart_FY, restart_lvl, &
-          restart_pond_lvl, restart_pond_topo, restart_aero, &
+          restart_pond_lvl, restart_pond_topo, restart_aero, restart_mp, &
           restart_fsd, restart_iso, restart_snow
       use ice_restart_shared, only: &
           restart, restart_ext, restart_coszen, use_restart_time, &
@@ -170,7 +170,7 @@
         sw_redist, calc_dragio, use_smliq_pnd, snwgrain
 
       logical (kind=log_kind) :: tr_iage, tr_FY, tr_lvl, tr_pond
-      logical (kind=log_kind) :: tr_iso, tr_aero, tr_fsd, tr_snow
+      logical (kind=log_kind) :: tr_iso, tr_aero, tr_mp, tr_fsd, tr_snow
       logical (kind=log_kind) :: tr_pond_lvl, tr_pond_topo
       integer (kind=int_kind) :: numin, numax  ! unit number limits
       logical (kind=log_kind) :: lcdf64  ! deprecated, backwards compatibility
@@ -229,8 +229,9 @@
         tr_snow, restart_snow,                                          &
         tr_iso, restart_iso,                                            &
         tr_aero, restart_aero,                                          &
+        tr_mp, restart_mp,                                          &
         tr_fsd, restart_fsd,                                            &
-        n_iso, n_aero, n_zaero, n_algae,                                &
+        n_iso, n_aero, n_mp, n_zaero, n_algae,                          &
         n_doc, n_dic, n_don, n_fed, n_fep
 
       namelist /thermo_nml/ &
@@ -588,11 +589,14 @@
       restart_iso  = .false. ! isotopes restart
       tr_aero      = .false. ! aerosols
       restart_aero = .false. ! aerosols restart
+      tr_mp      = .false. ! microplastics
+      restart_mp = .false. ! microplastics
       tr_fsd       = .false. ! floe size distribution
       restart_fsd  = .false. ! floe size distribution restart
 
       n_iso = 0
       n_aero = 0
+      n_mp = 0
       n_zaero = 0
       n_algae = 0
       n_doc = 0
@@ -1167,6 +1171,8 @@
       call broadcast_scalar(restart_iso,          master_task)
       call broadcast_scalar(tr_aero,              master_task)
       call broadcast_scalar(restart_aero,         master_task)
+      call broadcast_scalar(tr_mp,              master_task)
+      call broadcast_scalar(restart_mp,         master_task)
       call broadcast_scalar(tr_fsd,               master_task)
       call broadcast_scalar(restart_fsd,          master_task)
       call broadcast_scalar(ncat,                 master_task)
@@ -1176,6 +1182,7 @@
       call broadcast_scalar(nblyr,                master_task)
       call broadcast_scalar(n_iso,                master_task)
       call broadcast_scalar(n_aero,               master_task)
+      call broadcast_scalar(n_mp,               master_task)
       call broadcast_scalar(n_zaero,              master_task)
       call broadcast_scalar(n_algae,              master_task)
       call broadcast_scalar(n_doc,                master_task)
@@ -1246,6 +1253,7 @@
             restart = .false.
             restart_iso =  .false.
             restart_aero =  .false.
+            restart_mp =  .false.
             restart_fsd =  .false.
             restart_age =  .false.
             restart_fy =  .false.
@@ -1576,6 +1584,15 @@
             write(nu_diag,*) subname//' ERROR: aerosols activated but'
             write(nu_diag,*) subname//' ERROR:   not allocated in tracer array.'
             write(nu_diag,*) subname//' ERROR:   if tr_aero, n_aero must be > 0.'
+         endif
+         abort_list = trim(abort_list)//":9"
+      endif
+
+      if (tr_mp .and. n_mp==0) then
+         if (my_task == master_task) then
+            write(nu_diag,*) subname//' ERROR: microplastics activated but'
+            write(nu_diag,*) subname//' ERROR:   not allocated in tracer array.'
+            write(nu_diag,*) subname//' ERROR:   if tr_mp, n_mp must be > 0.'
          endif
          abort_list = trim(abort_list)//":9"
       endif
@@ -2501,6 +2518,7 @@
          if (tr_FY)        write(nu_diag,1010) ' tr_FY            = ', tr_FY,' : first-year ice area'
          if (tr_iso)       write(nu_diag,1010) ' tr_iso           = ', tr_iso,' : diagnostic isotope tracers'
          if (tr_aero)      write(nu_diag,1010) ' tr_aero          = ', tr_aero,' : CESM aerosol tracers'
+         if (tr_mp)        write(nu_diag,1010) ' tr_mp            = ', tr_mp,' : CESM microplastic tracers'
          write(nu_diag,*) 'Non-conserved properties:'
          write(nu_diag,*) 'ice surface temperature'
          write(nu_diag,*) 'ice velocity components and internal stress'
@@ -2640,10 +2658,12 @@
          write(nu_diag,1011) ' restart_snow     = ', restart_snow
          write(nu_diag,1011) ' restart_iso      = ', restart_iso
          write(nu_diag,1011) ' restart_aero     = ', restart_aero
+         write(nu_diag,1011) ' restart_mp       = ', restart_mp
          write(nu_diag,1011) ' restart_fsd      = ', restart_fsd
 
          write(nu_diag,1021) ' n_iso            = ', n_iso
          write(nu_diag,1021) ' n_aero           = ', n_aero
+         write(nu_diag,1021) ' n_mp             = ', n_mp
          write(nu_diag,1021) ' n_zaero          = ', n_zaero
          write(nu_diag,1021) ' n_algae          = ', n_algae
          write(nu_diag,1021) ' n_doc            = ', n_doc
@@ -2734,10 +2754,12 @@
          sw_redist_in=sw_redist, sw_frac_in=sw_frac, sw_dtemp_in=sw_dtemp)
       call icepack_init_tracer_flags(tr_iage_in=tr_iage, tr_FY_in=tr_FY, &
          tr_lvl_in=tr_lvl, tr_iso_in=tr_iso, tr_aero_in=tr_aero, &
+         tr_mp_in=tr_mp, &
          tr_fsd_in=tr_fsd, tr_snow_in=tr_snow, tr_pond_in=tr_pond, &
          tr_pond_lvl_in=tr_pond_lvl, tr_pond_topo_in=tr_pond_topo)
       call icepack_init_tracer_sizes(ncat_in=ncat, nilyr_in=nilyr, nslyr_in=nslyr, nblyr_in=nblyr, &
          nfsd_in=nfsd, n_algae_in=n_algae, n_iso_in=n_iso, n_aero_in=n_aero, &
+         n_mp_in=n_mp, &
          n_DOC_in=n_DOC, n_DON_in=n_DON, &
          n_DIC_in=n_DIC, n_fed_in=n_fed, n_fep_in=n_fep, n_zaero_in=n_zaero)
       call icepack_warnings_flush(nu_diag)
@@ -2773,7 +2795,7 @@
 
       use ice_blocks, only: block, get_block, nx_block, ny_block
       use ice_domain, only: nblocks, blocks_ice, halo_info
-      use ice_domain_size, only: ncat, nilyr, nslyr, n_iso, n_aero, nfsd
+      use ice_domain_size, only: ncat, nilyr, nslyr, n_iso, n_aero, n_mp, nfsd
       use ice_flux, only: sst, Tf, Tair, salinz, Tmltz
       use ice_grid, only: tmask, umask, ULON, TLAT, grid_ice, grid_average_X2Y
       use ice_boundary, only: ice_HaloUpdate
@@ -2795,13 +2817,13 @@
 
 
       integer (kind=int_kind) :: ntrcr
-      logical (kind=log_kind) :: tr_iage, tr_FY, tr_lvl, tr_iso, tr_aero
+      logical (kind=log_kind) :: tr_iage, tr_FY, tr_lvl, tr_iso, tr_aero, tr_mp
       logical (kind=log_kind) :: tr_pond_lvl, tr_pond_topo
       logical (kind=log_kind) :: tr_snow, tr_fsd
       integer (kind=int_kind) :: nt_Tsfc, nt_sice, nt_qice, nt_qsno, nt_iage, nt_FY
       integer (kind=int_kind) :: nt_alvl, nt_vlvl, nt_apnd, nt_hpnd, nt_ipnd
       integer (kind=int_kind) :: nt_smice, nt_smliq, nt_rhos, nt_rsnw
-      integer (kind=int_kind) :: nt_isosno, nt_isoice, nt_aero, nt_fsd
+      integer (kind=int_kind) :: nt_isosno, nt_isoice, nt_aero, nt_mp, nt_fsd
 
       type (block) :: &
          this_block           ! block information for current block
@@ -2813,12 +2835,14 @@
       call icepack_query_tracer_sizes(ntrcr_out=ntrcr)
       call icepack_query_tracer_flags(tr_iage_out=tr_iage, tr_FY_out=tr_FY, &
         tr_lvl_out=tr_lvl, tr_iso_out=tr_iso, tr_aero_out=tr_aero, &
+        tr_mp_out = tr_mp, &
         tr_pond_lvl_out=tr_pond_lvl, tr_pond_topo_out=tr_pond_topo, &
         tr_snow_out=tr_snow, tr_fsd_out=tr_fsd)
       call icepack_query_tracer_indices(nt_Tsfc_out=nt_Tsfc, nt_sice_out=nt_sice, &
         nt_qice_out=nt_qice, nt_qsno_out=nt_qsno, nt_iage_out=nt_iage, nt_fy_out=nt_fy, &
         nt_alvl_out=nt_alvl, nt_vlvl_out=nt_vlvl, nt_apnd_out=nt_apnd, nt_hpnd_out=nt_hpnd, &
         nt_ipnd_out=nt_ipnd, nt_aero_out=nt_aero, nt_fsd_out=nt_fsd, &
+        nt_mp_out=nt_mp, &
         nt_smice_out=nt_smice, nt_smliq_out=nt_smliq, &
         nt_rhos_out=nt_rhos, nt_rsnw_out=nt_rsnw, &
         nt_isosno_out=nt_isosno, nt_isoice_out=nt_isoice)
@@ -2902,6 +2926,15 @@
             trcr_depend(nt_aero+(it-1)*4+3) = 1 ! ice
          enddo
       endif
+      if (tr_mp) then ! volume-weighted microplastics
+         do it = 1, n_mp
+            trcr_depend(nt_mp+(it-1)*4  ) = 2 ! snow
+            trcr_depend(nt_mp+(it-1)*4+1) = 2 ! snow
+            trcr_depend(nt_mp+(it-1)*4+2) = 1 ! ice
+            trcr_depend(nt_mp+(it-1)*4+3) = 1 ! ice
+         enddo
+      endif
+
 
       trcr_base = c0
 
