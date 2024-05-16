@@ -849,14 +849,14 @@ contains
        call state_getimport(importState, 'Faxa_snow_wiso', output=fiso_atm, index=3, ungridded_index=2, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-       call state_getimport(importState, 'So_roce_wiso', output=HDO_ocn   , ungridded_index=3, &
-            areacor=med2mod_areacor, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call state_getimport(importState, 'So_roce_wiso', output=H2_16O_ocn, ungridded_index=1, &
-            areacor=med2mod_areacor, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call state_getimport(importState, 'So_roce_wiso', output=H2_18O_ocn, ungridded_index=2, &
-            areacor=med2mod_areacor, rc=rc)
+!      call state_getimport(importState, 'So_roce_wiso', output=HDO_ocn   , ungridded_index=3, &
+!           areacor=med2mod_areacor, rc=rc)
+!      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+!      call state_getimport(importState, 'So_roce_wiso', output=H2_16O_ocn, ungridded_index=1, &
+!           areacor=med2mod_areacor, rc=rc)
+!      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+!      call state_getimport(importState, 'So_roce_wiso', output=H2_18O_ocn, ungridded_index=2, &
+!           areacor=med2mod_areacor, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 

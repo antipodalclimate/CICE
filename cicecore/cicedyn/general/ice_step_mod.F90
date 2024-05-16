@@ -1083,7 +1083,7 @@
       subroutine step_dyn_ridge (dt, ndtd, iblk)
 
       use ice_arrays_column, only: hin_max, first_ice
-      use ice_domain_size, only: ncat, nilyr, nslyr, n_aero, n_mp, nblyr
+      use ice_domain_size, only: ncat, nilyr, nslyr, n_aero, n_iso, n_mp, nblyr
       use ice_flux, only: &
           rdg_conv, rdg_shear, dardg1dt, dardg2dt, &
           dvirdgdt, opening, fpond, fresh, fhocn, &
@@ -1147,7 +1147,7 @@
             call icepack_step_ridge (dt=dt, ndtd=ndtd,                 &
                          nilyr=nilyr, nslyr=nslyr, nblyr=nblyr,        &
                          ncat=ncat, n_aero=n_aero, hin_max=hin_max(:), &
-                         n_mp = n_mp, &
+                         n_iso = n_iso, n_mp = n_mp,         &
                          trcr_depend   = trcr_depend  (:),   &
                          trcr_base     = trcr_base    (:,:), &
                          n_trcr_strata = n_trcr_strata(:),   &

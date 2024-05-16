@@ -797,11 +797,11 @@
          do n=1,n_iso
             write(nchar,'(i3.3)') n
             write(vname_in,'(a,a)') 'isosno', trim(nchar)
-            call define_hist_field(n_isosno(n,:),vname_in,"kg/kg",   &
+            call define_hist_field(n_isosno(n,:),vname_in,"kg/m^2",   &
                 tstr2D, tcstr,"snow isotope mass concentration","none", c1, c0, &
                 ns, f_iso)
             write(vname_in,'(a,a)') 'isoice', trim(nchar)
-            call define_hist_field(n_isoice(n,:),vname_in,"kg/kg",   &
+            call define_hist_field(n_isoice(n,:),vname_in,"kg/m^2",   &
                 tstr2D, tcstr,"ice isotope mass concentration","none", c1, c0, &
                 ns, f_iso)
          enddo
@@ -832,19 +832,19 @@
          do n=1,n_aero
             write(nchar,'(i3.3)') n
             write(vname_in,'(a,a)') 'aerosnossl', trim(nchar)
-            call define_hist_field(n_aerosn1(n,:),vname_in,"kg/kg",   &
+            call define_hist_field(n_aerosn1(n,:),vname_in,"kg/m^2",   &
                 tstr2D, tcstr,"snow ssl aerosol mass","none", c1, c0, &
                 ns, f_aero)
             write(vname_in,'(a,a)') 'aerosnoint', trim(nchar)
-            call define_hist_field(n_aerosn2(n,:),vname_in,"kg/kg",   &
+            call define_hist_field(n_aerosn2(n,:),vname_in,"kg/m^2",   &
                 tstr2D, tcstr,"snow int aerosol mass","none", c1, c0, &
                 ns, f_aero)
             write(vname_in,'(a,a)') 'aeroicessl', trim(nchar)
-            call define_hist_field(n_aeroic1(n,:),vname_in,"kg/kg",  &
+            call define_hist_field(n_aeroic1(n,:),vname_in,"kg/m^2",  &
                 tstr2D, tcstr,"ice ssl aerosol mass","none", c1, c0, &
                 ns, f_aero)
             write(vname_in,'(a,a)') 'aeroiceint', trim(nchar)
-            call define_hist_field(n_aeroic2(n,:),vname_in,"kg/kg",  &
+            call define_hist_field(n_aeroic2(n,:),vname_in,"kg/m^2",  &
                 tstr2D, tcstr,"ice int aerosol mass","none", c1, c0, &
                 ns, f_aero)
          enddo
@@ -875,19 +875,19 @@
          do n=1,n_mp
             write(nchar,'(i3.3)') n
             write(vname_in,'(a,a)') 'mpsnossl', trim(nchar)
-            call define_hist_field(n_mpsn1(n,:),vname_in,"kg/kg",   &
+            call define_hist_field(n_mpsn1(n,:),vname_in,"kg/m^2",   &
                 tstr2D, tcstr,"snow ssl microplastic mass","none", c1, c0, &
                 ns, f_mp)
             write(vname_in,'(a,a)') 'mpsnoint', trim(nchar)
-            call define_hist_field(n_mpsn2(n,:),vname_in,"kg/kg",   &
+            call define_hist_field(n_mpsn2(n,:),vname_in,"kg/m^2",   &
                 tstr2D, tcstr,"snow int microplastic mass","none", c1, c0, &
                 ns, f_mp)
             write(vname_in,'(a,a)') 'mpicessl', trim(nchar)
-            call define_hist_field(n_mpic1(n,:),vname_in,"kg/kg",  &
+            call define_hist_field(n_mpic1(n,:),vname_in,"kg/m^2",  &
                 tstr2D, tcstr,"ice ssl microplastic mass","none", c1, c0, &
                 ns, f_mp)
             write(vname_in,'(a,a)') 'mpiceint', trim(nchar)
-            call define_hist_field(n_mpic2(n,:),vname_in,"kg/kg",  &
+            call define_hist_field(n_mpic2(n,:),vname_in,"kg/m^2",  &
                 tstr2D, tcstr,"ice int microplastic mass","none", c1, c0, &
                 ns, f_mp)
          enddo
@@ -1923,7 +1923,7 @@
       use ice_history_shared, only: n2D, a2D, a3Dc, &
           n3Dzcum, n3Dbcum, a3Db, a3Da, &
           ncat_hist, accum_hist_field, nzblyr, nzalyr
-      use ice_state, only: trcrn, trcr, aicen, aice, vicen
+      use ice_state, only: trcrn, trcr, aicen, aice, vicen, vsno, vice
 
       integer (kind=int_kind), intent(in) :: &
            iblk                 ! block index
@@ -2058,9 +2058,9 @@
       if (f_iso(1:1) /= 'x') then
          do n=1,n_iso
             call accum_hist_field(n_isosno(n,:), iblk, &
-                               trcr(:,:,nt_isosno+n-1,iblk)/rhos, a2D)
+                               vsno(:,:,iblk)*trcr(:,:,nt_isosno+n-1,iblk), a2D)
             call accum_hist_field(n_isoice(n,:), iblk, &
-                               trcr(:,:,nt_isoice+n-1,iblk)/rhos, a2D)
+                               vice(:,:,iblk)*trcr(:,:,nt_isoice+n-1,iblk), a2D)
          enddo
       endif
 
@@ -2080,13 +2080,13 @@
       if (f_aero(1:1) /= 'x') then
          do n=1,n_aero
             call accum_hist_field(n_aerosn1(n,:), iblk, &
-                               trcr(:,:,nt_aero  +4*(n-1),iblk)/rhos, a2D)
+                               vsno(:,:,iblk)*trcr(:,:,nt_aero  +4*(n-1),iblk), a2D)
             call accum_hist_field(n_aerosn2(n,:), iblk, &
-                               trcr(:,:,nt_aero+1+4*(n-1),iblk)/rhos, a2D)
+                               vsno(:,:,iblk)*trcr(:,:,nt_aero+1+4*(n-1),iblk), a2D)
             call accum_hist_field(n_aeroic1(n,:), iblk, &
-                               trcr(:,:,nt_aero+2+4*(n-1),iblk)/rhoi, a2D)
+                               vice(:,:,iblk)*trcr(:,:,nt_aero+2+4*(n-1),iblk), a2D)
             call accum_hist_field(n_aeroic2(n,:), iblk, &
-                               trcr(:,:,nt_aero+3+4*(n-1),iblk)/rhoi, a2D)
+                               vice(:,:,iblk)*trcr(:,:,nt_aero+3+4*(n-1),iblk), a2D)
          enddo
       endif
 
@@ -2106,13 +2106,13 @@
       if (f_mp(1:1) /= 'x') then
          do n=1,n_mp
             call accum_hist_field(n_mpsn1(n,:), iblk, &
-                               trcr(:,:,nt_mp  +4*(n-1),iblk)/rhos, a2D)
+                               vsno(:,:,iblk)*trcr(:,:,nt_mp  +4*(n-1),iblk), a2D)
             call accum_hist_field(n_mpsn2(n,:), iblk, &
-                               trcr(:,:,nt_mp+1+4*(n-1),iblk)/rhos, a2D)
+                               vsno(:,:,iblk)*trcr(:,:,nt_mp+1+4*(n-1),iblk), a2D)
             call accum_hist_field(n_mpic1(n,:), iblk, &
-                               trcr(:,:,nt_mp+2+4*(n-1),iblk)/rhoi, a2D)
+                               vice(:,:,iblk)*trcr(:,:,nt_mp+2+4*(n-1),iblk), a2D)
             call accum_hist_field(n_mpic2(n,:), iblk, &
-                               trcr(:,:,nt_mp+3+4*(n-1),iblk)/rhoi, a2D)
+                               vice(:,:,iblk)*trcr(:,:,nt_mp+3+4*(n-1),iblk), a2D)
          enddo
       endif
 

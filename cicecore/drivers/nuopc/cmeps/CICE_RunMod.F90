@@ -625,13 +625,13 @@
                             fswthru_idr(:,:,iblk),                   &
                             fswthru_idf(:,:,iblk),                   &
                             faero_ocn(:,:,:,iblk),                   &
-                            fmp_ocn(:,:,:,iblk),                   &
                             alvdr    (:,:,iblk), alidr   (:,:,iblk), &
                             alvdf    (:,:,iblk), alidf   (:,:,iblk), &
                             flux_bio (:,:,1:nbtrcr,iblk),            &
                             Qref_iso =Qref_iso (:,:,:,iblk),         &
                             fiso_evap=fiso_evap(:,:,:,iblk),         &
                             fiso_ocn =fiso_ocn (:,:,:,iblk),         &
+                            fmp_ocn=fmp_ocn(:,:,:,iblk),             &
                             Uref=Uref(:,:,iblk), wind=wind(:,:,iblk) )
 
       !-----------------------------------------------------------------

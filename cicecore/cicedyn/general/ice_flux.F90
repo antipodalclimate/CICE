@@ -1139,14 +1139,13 @@
                                fswthru_vdr, fswthru_vdf, &
                                fswthru_idr, fswthru_idf, &
                                faero_ocn,          &
-                               fmp_ocn,          &
                                alvdr,    alidr,    &
                                alvdf,    alidf,    &
                                flux_bio,           &
                                fsurf,    fcondtop, &
                                Uref,     wind,     &
                                Qref_iso,           &
-                               fiso_evap,fiso_ocn)
+                               fiso_evap,fiso_ocn,fmp_ocn)
 
       use icepack_intfc, only: icepack_max_iso, icepack_max_mp
 
