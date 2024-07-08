@@ -833,7 +833,7 @@ contains
           write(nu_diag,*) trim(subname),' curr_ymd = ',curr_ymd
           write(nu_diag,*) trim(subname),' cice year_init = ',year_init
           write(nu_diag,*) trim(subname),' cice start date = ',idate
-          write(nu_diag,*) trim(subname),' cice start ymds = ',myear,mmonth,mday
+          write(nu_diag,*) trim(subname),' cice start ymds = ',myear,mmonth,mday,start_tod
           write(nu_diag,*) trim(subname),' cice calendar_type = ',trim(calendar_type)
        endif
 
