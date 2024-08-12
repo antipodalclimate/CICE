@@ -395,8 +395,14 @@ contains
           do i = ilo, ihi
              n = n+1
              model_areas(n) = tarea(i,j,iblk)/(radius*radius)
-             mod2med_areacor(n) = model_areas(n) / mesh_areas(n)
-             med2mod_areacor(n) = mesh_areas(n) / model_areas(n)
+!PSH begin
+!Commented out as a hack fix to avoid issues with calculation of
+!grid cell areas that occur with zonally re-entrant grids.
+!             mod2med_areacor(n) = model_areas(n) / mesh_areas(n)
+!             med2mod_areacor(n) = mesh_areas(n) / model_areas(n)
+            mod2med_areacor(n) = 1.
+            med2mod_areacor(n) = 1.
+!PSH end
           enddo
        enddo
     enddo
